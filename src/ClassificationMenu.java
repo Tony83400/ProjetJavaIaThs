@@ -18,8 +18,8 @@ public class ClassificationMenu {
         boolean quitter = false;
         while (!quitter) {
             System.out.println("\n--- MENU CLASSIFICATION CHATS VS CHIENS ---");
-            System.out.println("1. Entraîner le modèle (Apprentissage)");
-            System.out.println("2. Tester le modèle (Évaluation)");
+            System.out.println("1. Entraîner le modèle (Apprentissage + Augmentation)");
+            System.out.println("2. Tester le modèle (Évaluation détaillée)");
             System.out.println("3. Quitter");
             System.out.print("Votre choix : ");
 
@@ -59,29 +59,53 @@ public class ClassificationMenu {
 
         Collections.shuffle(imagesTrain);
 
-        int nbImagesTrain = imagesTrain.size();
+        int nbImagesOriginales = imagesTrain.size();
+        int nbImagesTotales = nbImagesOriginales * 2;
+
         Image premiereImage = imagesTrain.get(0);
         int largeurInitiale = premiereImage.largeur();
         int hauteurInitiale = premiereImage.hauteur();
         int tailleEntree = (largeurInitiale / TAILLE_BLOC) * (hauteurInitiale / TAILLE_BLOC);
 
-        float[][] entreesTrain = new float[nbImagesTrain][tailleEntree];
-        float[] resultatsTrain = new float[nbImagesTrain];
+        float[][] entreesTrain = new float[nbImagesTotales][tailleEntree];
+        float[] resultatsTrain = new float[nbImagesTotales];
 
-        System.out.println("Prétraitement des images (" + nbImagesTrain + " images)...");
-        for (int i = 0; i < nbImagesTrain; i++) {
+        System.out.println("Prétraitement et Augmentation (Miroir) en cours (" + nbImagesTotales + " images virtuelles)...");
+
+        // --- GÉNÉRATION DE LA PREUVE VISUELLE SUR LA 1ÈRE IMAGE ---
+        Image imageTest = imagesTrain.get(0);
+        int[] pixelsTestOriginal = imageTest.donnees();
+        int[] pixelsTestMiroir = TraitementSignal.appliquerMiroir(pixelsTestOriginal, largeurInitiale, hauteurInitiale);
+
+        TraitementSignal.exporterImage(pixelsTestOriginal, largeurInitiale, hauteurInitiale, "preuve_01_originale.jpg");
+        TraitementSignal.exporterImage(pixelsTestMiroir, largeurInitiale, hauteurInitiale, "preuve_02_miroir.jpg");
+        // -----------------------------------------------------------
+
+        for (int i = 0; i < nbImagesOriginales; i++) {
             Image img = imagesTrain.get(i);
-            resultatsTrain[i] = img.label();
+            int label = img.label();
 
+            // --- 1. TRAITEMENT DE L'IMAGE ORIGINALE ---
+            resultatsTrain[2 * i] = label;
             int[] pixelsContours = TraitementSignal.appliquerFiltreContours(img.donnees(), largeurInitiale, hauteurInitiale);
             int[] pixelsReduits = TraitementSignal.appliquerMaxPooling(pixelsContours, largeurInitiale, hauteurInitiale, TAILLE_BLOC);
 
             for (int j = 0; j < tailleEntree; j++) {
-                entreesTrain[i][j] = pixelsReduits[j] / 255.0f;
+                entreesTrain[2 * i][j] = pixelsReduits[j] / 255.0f;
+            }
+
+            // --- 2. TRAITEMENT DE L'IMAGE MIROIR ---
+            resultatsTrain[2 * i + 1] = label;
+            int[] pixelsMiroir = TraitementSignal.appliquerMiroir(img.donnees(), largeurInitiale, hauteurInitiale);
+            int[] pixelsContoursMiroir = TraitementSignal.appliquerFiltreContours(pixelsMiroir, largeurInitiale, hauteurInitiale);
+            int[] pixelsReduitsMiroir = TraitementSignal.appliquerMaxPooling(pixelsContoursMiroir, largeurInitiale, hauteurInitiale, TAILLE_BLOC);
+
+            for (int j = 0; j < tailleEntree; j++) {
+                entreesTrain[2 * i + 1][j] = pixelsReduitsMiroir[j] / 255.0f;
             }
         }
 
-        System.out.println("Début de l'apprentissage...");
+        System.out.println("Début de l'apprentissage (cela peut prendre un peu plus de temps)...");
         Neurone neurone = new NeuroneSigmoide(tailleEntree);
         neurone.apprentissage(entreesTrain, resultatsTrain, MSE_LIMITE);
         System.out.println("Apprentissage terminé.");
@@ -98,7 +122,6 @@ public class ClassificationMenu {
             return;
         }
 
-        // Déterminer la taille d'entrée à partir du dataset (ou d'une image échantillon)
         List<String> testChats = Image.listeFichiers("dataset_animaux/test/cat/");
         List<String> testChiens = Image.listeFichiers("dataset_animaux/test/dog/");
 
@@ -123,7 +146,7 @@ public class ClassificationMenu {
         int bonnesReponses = 0;
         int totalTest = imagesTest.size();
 
-        System.out.println("Évaluation sur " + totalTest + " images...");
+        System.out.println("Évaluation détaillée sur " + totalTest + " images...");
         for (int i = 0; i < totalTest; i++) {
             Image img = imagesTest.get(i);
             int labelReel = img.label();
@@ -140,13 +163,19 @@ public class ClassificationMenu {
             float sortieBrute = neurone.sortie();
             int labelTrouve = (sortieBrute >= 0.5f) ? 1 : 0;
 
+            String animalCible = (labelReel == 0) ? "Chat" : "Chien";
+            String animalTrouve = (labelTrouve == 0) ? "Chat" : "Chien";
+
             if (labelReel == labelTrouve) {
+                System.out.printf("✅ Image %d (%s) -> IA a trouvé : %s (Confiance: %.2f)\n", i, animalCible, animalTrouve, sortieBrute);
                 bonnesReponses++;
+            } else {
+                System.out.printf("❌ Image %d (%s) -> IA s'est trompée : %s (Valeur sortie: %.2f)\n", i, animalCible, animalTrouve, sortieBrute);
             }
         }
 
         float pourcentage = ((float) bonnesReponses / totalTest) * 100;
-        System.out.println("=========================================");
+        System.out.println("\n=========================================");
         System.out.println("Résultats sur " + totalTest + " images de test :");
         System.out.println("Score final : " + pourcentage + "% de bonnes réponses (" + bonnesReponses + "/" + totalTest + ")");
         System.out.println("=========================================");

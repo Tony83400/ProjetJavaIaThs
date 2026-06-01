@@ -75,4 +75,41 @@ public class TraitementSignal {
         }
         return resultat;
     }
+
+    // 4. Augmentation de données : Effet Miroir horizontal
+    public static int[] appliquerMiroir(int[] pixelsBruts, int largeur, int hauteur) {
+        int[] resultat = new int[pixelsBruts.length];
+
+        for (int y = 0; y < hauteur; y++) {
+            for (int x = 0; x < largeur; x++) {
+                int indexOriginal = y * largeur + x;
+                int indexMiroir = y * largeur + (largeur - 1 - x);
+                resultat[indexMiroir] = pixelsBruts[indexOriginal];
+            }
+        }
+        return resultat;
+    }
+
+    // 5. Outil d'ingénierie : Exporter un tableau de pixels en image JPG
+    public static void exporterImage(int[] pixels, int largeur, int hauteur, String cheminSortie) {
+        try {
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(largeur, hauteur, java.awt.image.BufferedImage.TYPE_INT_RGB);
+
+            for (int y = 0; y < hauteur; y++) {
+                for (int x = 0; x < largeur; x++) {
+                    int gris = pixels[y * largeur + x];
+                    gris = Math.max(0, Math.min(255, gris));
+
+                    int rgb = (gris << 16) | (gris << 8) | gris;
+                    img.setRGB(x, y, rgb);
+                }
+            }
+
+            javax.imageio.ImageIO.write(img, "jpg", new java.io.File(cheminSortie));
+            System.out.println("📸 Preuve visuelle générée : " + cheminSortie);
+
+        } catch (Exception e) {
+            System.out.println("❌ Erreur lors de l'exportation de l'image : " + e.getMessage());
+        }
+    }
 }
