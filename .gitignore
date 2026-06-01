@@ -29,4 +29,5 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-dataset_animaux/*
+modele_neurone.txt
+*.jpg
