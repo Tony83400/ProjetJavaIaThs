@@ -1,4 +1,3 @@
-import neurone.iNeurone;
 import neurone.Neurone;
 import neurone.NeuroneSigmoide;
 import java.util.List;
@@ -7,7 +6,7 @@ import java.util.Collections;
 import java.util.Scanner;
 import java.io.File;
 
-public class ClassificationMenu {
+public class Main {
 
     private static final String MODELE_PATH = "modele_neurone.txt";
     private static final int TAILLE_BLOC = 4;

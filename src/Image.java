@@ -78,18 +78,5 @@ public class Image
 		return cheminsFichiers;
 	}
 
-	public static void main (String[] args)
-	{
-		List<String> cheminsFichiers = listeFichiers("dataset_animaux/");
-		for (String chemin : cheminsFichiers) {
-			System.out.println(chemin);
-		}
 
-		final String chemin = "dataset_animaux/train/dog/000002.jpg";
-		final int labelImage = chemin.indexOf("dog") != -1 ? LabelChien : LabelInconnu;
-		Image im1 = new Image(chemin, labelImage, false);
-		Image im2 = new Image(chemin, labelImage, true);
-		im1.afficheMetadonnees();
-		im2.afficheMetadonnees();
-	}
 }

@@ -1,0 +1,1 @@
+Glissez vos dossier test et train ici, chaqu'un doit contenir un dossier cat et un dossier dog
