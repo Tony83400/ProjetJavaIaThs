@@ -11,7 +11,19 @@ public class Main {
     private static final String MODELE_PATH = "modele_neurone.txt";
     private static final int TAILLE_BLOC = 4;
     private static final float MSE_LIMITE = 0.05f;
+    public static final float ValeurNormalisation = 255.0f;
     private static Scanner scanner = new Scanner(System.in);
+
+    // =========================================================================
+    // ⚙️ INTERRUPTEURS POUR VOS TESTS (Modifiez ici pour observer les effets)
+    // =========================================================================
+    private static final boolean ACTIVER_NIVEAUX_DE_GRIS = true; // true = Grayscale (1 canal) | false = RGB (3 canaux)
+    private static final boolean ACTIVER_CONTOURS = true;       // true = Filtre Laplacien (Uniquement en mode Gris)
+    private static final boolean ACTIVER_MAX_POOLING = true;    // true = Réduction (Uniquement en mode Gris)
+    private static final boolean ACTIVER_MELANGE_DONNE = true;   // true = Mélange des images (shuffle)
+    private static final boolean ACTIVER_MIROIR = true;          // true = Active l'augmentation par effet miroir (double les images)
+    private static final boolean ACTIVER_NORMALISATION = true;   // true = Divise par 255 (0.0 à 1.0) | false = Garde les valeurs brutes (0.0 à 255.0)
+    // =========================================================================
 
     public static void main(String[] args) {
         boolean quitter = false;
@@ -53,58 +65,87 @@ public class Main {
         }
 
         List<Image> imagesTrain = new ArrayList<>();
-        for (String chemin : trainChats) imagesTrain.add(new Image(chemin, 0, true));
-        for (String chemin : trainChiens) imagesTrain.add(new Image(chemin, 1, true));
+        for (String chemin : trainChats) imagesTrain.add(new Image(chemin, 0, ACTIVER_NIVEAUX_DE_GRIS));
+        for (String chemin : trainChiens) imagesTrain.add(new Image(chemin, 1, ACTIVER_NIVEAUX_DE_GRIS));
 
-        Collections.shuffle(imagesTrain);
+        if (ACTIVER_MELANGE_DONNE){
+            Collections.shuffle(imagesTrain);
+        }
 
         int nbImagesOriginales = imagesTrain.size();
-        int nbImagesTotales = nbImagesOriginales * 2;
+        // Calcul dynamique du nombre total d'images selon l'état du miroir
+        int nbImagesTotales = ACTIVER_MIROIR ? (nbImagesOriginales * 2) : nbImagesOriginales;
 
         Image premiereImage = imagesTrain.get(0);
         int largeurInitiale = premiereImage.largeur();
         int hauteurInitiale = premiereImage.hauteur();
-        int tailleEntree = (largeurInitiale / TAILLE_BLOC) * (hauteurInitiale / TAILLE_BLOC);
+
+        int nbCanaux = ACTIVER_NIVEAUX_DE_GRIS ? 1 : 3;
+        int blocEffectif = (ACTIVER_NIVEAUX_DE_GRIS && ACTIVER_MAX_POOLING) ? TAILLE_BLOC : 1;
+        int tailleEntree = (largeurInitiale / blocEffectif) * (hauteurInitiale / blocEffectif) * nbCanaux;
 
         float[][] entreesTrain = new float[nbImagesTotales][tailleEntree];
         float[] resultatsTrain = new float[nbImagesTotales];
 
-        System.out.println("Prétraitement et Augmentation (Miroir) en cours (" + nbImagesTotales + " images virtuelles)...");
+        // Détermination du diviseur pour la normalisation
+        float diviseur = ACTIVER_NORMALISATION ? ValeurNormalisation : 1.0f;
 
-        // --- GÉNÉRATION DE LA PREUVE VISUELLE SUR LA 1ÈRE IMAGE ---
-        Image imageTest = imagesTrain.get(0);
-        int[] pixelsTestOriginal = imageTest.donnees();
-        int[] pixelsTestMiroir = TraitementSignal.appliquerMiroir(pixelsTestOriginal, largeurInitiale, hauteurInitiale);
+        if (ACTIVER_NIVEAUX_DE_GRIS) {
+            System.out.println("Prétraitement en cours (" + nbImagesTotales + " images au total)...");
+            imageTestOriginal(imagesTrain.get(0), largeurInitiale, hauteurInitiale);
+        } else {
+            System.out.println("Préparation des données RGB brutes (" + nbImagesTotales + " images)...");
+        }
 
-        TraitementSignal.exporterImage(pixelsTestOriginal, largeurInitiale, hauteurInitiale, "preuve_01_originale.jpg");
-        TraitementSignal.exporterImage(pixelsTestMiroir, largeurInitiale, hauteurInitiale, "preuve_02_miroir.jpg");
-        // -----------------------------------------------------------
-
+        int idx = 0; // Compteur dynamique pour remplir les tableaux sans sauts d'index
         for (int i = 0; i < nbImagesOriginales; i++) {
             Image img = imagesTrain.get(i);
             int label = img.label();
 
-            // --- 1. TRAITEMENT DE L'IMAGE ORIGINALE ---
-            resultatsTrain[2 * i] = label;
-            int[] pixelsContours = TraitementSignal.appliquerFiltreContours(img.donnees(), largeurInitiale, hauteurInitiale);
-            int[] pixelsReduits = TraitementSignal.appliquerMaxPooling(pixelsContours, largeurInitiale, hauteurInitiale, TAILLE_BLOC);
+            if (ACTIVER_NIVEAUX_DE_GRIS) {
+                // --- MODE 1 : NUANCES DE GRIS ---
+                resultatsTrain[idx] = label;
+                int[] pixelsContours = ACTIVER_CONTOURS ?
+                        TraitementSignal.appliquerFiltreContours(img.donnees(), largeurInitiale, hauteurInitiale) : img.donnees();
+                int[] pixelsReduits = TraitementSignal.appliquerMaxPooling(pixelsContours, largeurInitiale, hauteurInitiale, blocEffectif);
 
-            for (int j = 0; j < tailleEntree; j++) {
-                entreesTrain[2 * i][j] = pixelsReduits[j] / 255.0f;
-            }
+                for (int j = 0; j < tailleEntree; j++) {
+                    entreesTrain[idx][j] = pixelsReduits[j] / diviseur;
+                }
+                idx++;
 
-            // --- 2. TRAITEMENT DE L'IMAGE MIROIR ---
-            resultatsTrain[2 * i + 1] = label;
-            int[] pixelsMiroir = TraitementSignal.appliquerMiroir(img.donnees(), largeurInitiale, hauteurInitiale);
-            int[] pixelsContoursMiroir = TraitementSignal.appliquerFiltreContours(pixelsMiroir, largeurInitiale, hauteurInitiale);
-            int[] pixelsReduitsMiroir = TraitementSignal.appliquerMaxPooling(pixelsContoursMiroir, largeurInitiale, hauteurInitiale, TAILLE_BLOC);
+                // Ajout de l'image miroir uniquement si l'interrupteur est actif
+                if (ACTIVER_MIROIR) {
+                    resultatsTrain[idx] = label;
+                    int[] pixelsMiroir = TraitementSignal.appliquerMiroir(img.donnees(), largeurInitiale, hauteurInitiale);
+                    int[] pixelsContoursMiroir = ACTIVER_CONTOURS ?
+                            TraitementSignal.appliquerFiltreContours(pixelsMiroir, largeurInitiale, hauteurInitiale) : pixelsMiroir;
+                    int[] pixelsReduitsMiroir = TraitementSignal.appliquerMaxPooling(pixelsContoursMiroir, largeurInitiale, hauteurInitiale, blocEffectif);
 
-            for (int j = 0; j < tailleEntree; j++) {
-                entreesTrain[2 * i + 1][j] = pixelsReduitsMiroir[j] / 255.0f;
+                    for (int j = 0; j < tailleEntree; j++) {
+                        entreesTrain[idx][j] = pixelsReduitsMiroir[j] / diviseur;
+                    }
+                    idx++;
+                }
+            } else {
+                // --- MODE 2 : RGB BRUT ---
+                resultatsTrain[idx] = label;
+                for (int j = 0; j < tailleEntree; j++) {
+                    entreesTrain[idx][j] = img.donnees()[j] / diviseur;
+                }
+                idx++;
+
+                if (ACTIVER_MIROIR) {
+                    resultatsTrain[idx] = label;
+                    for (int j = 0; j < tailleEntree; j++) {
+                        entreesTrain[idx][j] = img.donnees()[j] / diviseur; // Copie identique pour le mode RGB brut
+                    }
+                    idx++;
+                }
             }
         }
 
-        System.out.println("Début de l'apprentissage (cela peut prendre un peu plus de temps)...");
+        System.out.println("Début de l'apprentissage...");
         Neurone neurone = new NeuroneSigmoide(tailleEntree);
         neurone.apprentissage(entreesTrain, resultatsTrain, MSE_LIMITE);
         System.out.println("Apprentissage terminé.");
@@ -130,13 +171,16 @@ public class Main {
         }
 
         List<Image> imagesTest = new ArrayList<>();
-        for (String chemin : testChats) imagesTest.add(new Image(chemin, 0, true));
-        for (String chemin : testChiens) imagesTest.add(new Image(chemin, 1, true));
+        for (String chemin : testChats) imagesTest.add(new Image(chemin, 0, ACTIVER_NIVEAUX_DE_GRIS));
+        for (String chemin : testChiens) imagesTest.add(new Image(chemin, 1, ACTIVER_NIVEAUX_DE_GRIS));
 
         Image sample = imagesTest.get(0);
         int largeurInitiale = sample.largeur();
         int hauteurInitiale = sample.hauteur();
-        int tailleEntree = (largeurInitiale / TAILLE_BLOC) * (hauteurInitiale / TAILLE_BLOC);
+
+        int nbCanaux = ACTIVER_NIVEAUX_DE_GRIS ? 1 : 3;
+        int blocEffectif = (ACTIVER_NIVEAUX_DE_GRIS && ACTIVER_MAX_POOLING) ? TAILLE_BLOC : 1;
+        int tailleEntree = (largeurInitiale / blocEffectif) * (hauteurInitiale / blocEffectif) * nbCanaux;
 
         System.out.println("Chargement du modèle...");
         Neurone neurone = new NeuroneSigmoide(tailleEntree);
@@ -145,17 +189,28 @@ public class Main {
         int bonnesReponses = 0;
         int totalTest = imagesTest.size();
 
+        // Détermination du diviseur pour le test (doit être identique à l'entraînement)
+        float diviseur = ACTIVER_NORMALISATION ? ValeurNormalisation : 1.0f;
+
         System.out.println("Évaluation détaillée sur " + totalTest + " images...");
         for (int i = 0; i < totalTest; i++) {
             Image img = imagesTest.get(i);
             int labelReel = img.label();
 
             float[] entreeTest = new float[tailleEntree];
-            int[] pixelsContours = TraitementSignal.appliquerFiltreContours(img.donnees(), largeurInitiale, hauteurInitiale);
-            int[] pixelsReduits = TraitementSignal.appliquerMaxPooling(pixelsContours, largeurInitiale, hauteurInitiale, TAILLE_BLOC);
 
-            for (int j = 0; j < tailleEntree; j++) {
-                entreeTest[j] = pixelsReduits[j] / 255.0f;
+            if (ACTIVER_NIVEAUX_DE_GRIS) {
+                int[] pixelsContours = ACTIVER_CONTOURS ?
+                        TraitementSignal.appliquerFiltreContours(img.donnees(), largeurInitiale, hauteurInitiale) : img.donnees();
+                int[] pixelsReduits = TraitementSignal.appliquerMaxPooling(pixelsContours, largeurInitiale, hauteurInitiale, blocEffectif);
+
+                for (int j = 0; j < tailleEntree; j++) {
+                    entreeTest[j] = pixelsReduits[j] / diviseur;
+                }
+            } else {
+                for (int j = 0; j < tailleEntree; j++) {
+                    entreeTest[j] = img.donnees()[j] / diviseur;
+                }
             }
 
             neurone.metAJour(entreeTest);
@@ -178,5 +233,13 @@ public class Main {
         System.out.println("Résultats sur " + totalTest + " images de test :");
         System.out.println("Score final : " + pourcentage + "% de bonnes réponses (" + bonnesReponses + "/" + totalTest + ")");
         System.out.println("=========================================");
+    }
+
+    private static int[] imageTestOriginal(Image img, int l, int h) {
+        int[] pixelsTestOriginal = img.donnees();
+        int[] pixelsTestMiroir = TraitementSignal.appliquerMiroir(pixelsTestOriginal, l, h);
+        TraitementSignal.exporterImage(pixelsTestOriginal, l, h, "preuve_01_originale.jpg");
+        TraitementSignal.exporterImage(pixelsTestMiroir, l, h, "preuve_02_miroir.jpg");
+        return pixelsTestOriginal;
     }
 }
