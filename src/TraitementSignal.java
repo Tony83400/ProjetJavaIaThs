@@ -1,6 +1,6 @@
 public class TraitementSignal {
 
-    // 1. Filtre Lisseur (Moyenneur) - Efface le bruit
+    // Filtre moyenneur (réduction du bruit)
     public static int[] appliquerFiltreMoyenneur(int[] pixelsBruts, int largeur, int hauteur) {
         int[] resultat = new int[pixelsBruts.length];
         for (int y = 1; y < hauteur - 1; y++) {
@@ -19,7 +19,7 @@ public class TraitementSignal {
         return resultat;
     }
 
-    // 2. Filtre de Contours (Laplacien) - Garde uniquement les arêtes vives
+    // Filtre Laplacien (détection de contours)
     public static int[] appliquerFiltreContours(int[] pixelsBruts, int largeur, int hauteur) {
         int[] resultat = new int[pixelsBruts.length];
         int[][] noyau = {
@@ -44,7 +44,7 @@ public class TraitementSignal {
         return resultat;
     }
 
-    // 3. Opération de Max Pooling (Réduction spatiale et tolérance)
+    // Max pooling (réduction spatiale)
     public static int[] appliquerMaxPooling(int[] pixelsBruts, int largeur, int hauteur, int tailleBloc) {
         int nouvelleLargeur = largeur / tailleBloc;
         int nouvelleHauteur = hauteur / tailleBloc;
@@ -76,7 +76,7 @@ public class TraitementSignal {
         return resultat;
     }
 
-    // 4. Augmentation de données : Effet Miroir horizontal
+    // Effet miroir horizontal (data augmentation)
     public static int[] appliquerMiroir(int[] pixelsBruts, int largeur, int hauteur) {
         int[] resultat = new int[pixelsBruts.length];
 
@@ -90,7 +90,7 @@ public class TraitementSignal {
         return resultat;
     }
 
-    // 5. Outil d'ingénierie : Exporter un tableau de pixels en image JPG
+    // Sauvegarde des pixels en image JPG
     public static void exporterImage(int[] pixels, int largeur, int hauteur, String cheminSortie) {
         try {
             java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(largeur, hauteur, java.awt.image.BufferedImage.TYPE_INT_RGB);
@@ -106,10 +106,10 @@ public class TraitementSignal {
             }
 
             javax.imageio.ImageIO.write(img, "jpg", new java.io.File(cheminSortie));
-            System.out.println("📸 Preuve visuelle générée : " + cheminSortie);
+            System.out.println("Image exportée : " + cheminSortie);
 
         } catch (Exception e) {
-            System.out.println("❌ Erreur lors de l'exportation de l'image : " + e.getMessage());
+            System.err.println("Erreur d'exportation de l'image : " + e.getMessage());
         }
     }
 }

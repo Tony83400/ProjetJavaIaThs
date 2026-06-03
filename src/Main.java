@@ -8,22 +8,20 @@ import java.io.File;
 
 public class Main {
 
+    // Constantes de configuration
     private static final String MODELE_PATH = "modele_neurone.txt";
     private static final int TAILLE_BLOC = 4;
     private static final float MSE_LIMITE = 0.05f;
     public static final float ValeurNormalisation = 255.0f;
     private static Scanner scanner = new Scanner(System.in);
 
-    // =========================================================================
-    // ⚙️ INTERRUPTEURS POUR VOS TESTS (Modifiez ici pour observer les effets)
-    // =========================================================================
-    private static final boolean ACTIVER_NIVEAUX_DE_GRIS = true; // true = Grayscale (1 canal) | false = RGB (3 canaux)
-    private static final boolean ACTIVER_CONTOURS = true;       // true = Filtre Laplacien (Uniquement en mode Gris)
-    private static final boolean ACTIVER_MAX_POOLING = true;    // true = Réduction (Uniquement en mode Gris)
-    private static final boolean ACTIVER_MELANGE_DONNE = true;   // true = Mélange des images (shuffle)
-    private static final boolean ACTIVER_MIROIR = true;          // true = Active l'augmentation par effet miroir (double les images)
-    private static final boolean ACTIVER_NORMALISATION = true;   // true = Divise par 255 (0.0 à 1.0) | false = Garde les valeurs brutes (0.0 à 255.0)
-    // =========================================================================
+    // Options de prétraitement des images
+    private static final boolean ACTIVER_NIVEAUX_DE_GRIS = true;
+    private static final boolean ACTIVER_CONTOURS = true;
+    private static final boolean ACTIVER_MAX_POOLING = true;
+    private static final boolean ACTIVER_MELANGE_DONNE = true;
+    private static final boolean ACTIVER_MIROIR = true;
+    private static final boolean ACTIVER_NORMALISATION = true;
 
     public static void main(String[] args) {
         boolean quitter = false;
@@ -56,6 +54,7 @@ public class Main {
         System.out.println("\n--- ENTRAÎNEMENT DU MODÈLE ---");
         System.out.println("Chargement des images d'entraînement...");
 
+        // Lecture des fichiers d'entraînement
         List<String> trainChats = Image.listeFichiers("dataset_animaux/train/cat/");
         List<String> trainChiens = Image.listeFichiers("dataset_animaux/train/dog/");
 
@@ -64,6 +63,7 @@ public class Main {
             return;
         }
 
+        // Attribution des labels : 0 pour les chats, 1 pour les chiens
         List<Image> imagesTrain = new ArrayList<>();
         for (String chemin : trainChats) imagesTrain.add(new Image(chemin, 0, ACTIVER_NIVEAUX_DE_GRIS));
         for (String chemin : trainChiens) imagesTrain.add(new Image(chemin, 1, ACTIVER_NIVEAUX_DE_GRIS));
@@ -72,8 +72,8 @@ public class Main {
             Collections.shuffle(imagesTrain);
         }
 
+        // Calcul de la taille du set de données selon l'activation de l'augmentation
         int nbImagesOriginales = imagesTrain.size();
-        // Calcul dynamique du nombre total d'images selon l'état du miroir
         int nbImagesTotales = ACTIVER_MIROIR ? (nbImagesOriginales * 2) : nbImagesOriginales;
 
         Image premiereImage = imagesTrain.get(0);
@@ -87,7 +87,6 @@ public class Main {
         float[][] entreesTrain = new float[nbImagesTotales][tailleEntree];
         float[] resultatsTrain = new float[nbImagesTotales];
 
-        // Détermination du diviseur pour la normalisation
         float diviseur = ACTIVER_NORMALISATION ? ValeurNormalisation : 1.0f;
 
         if (ACTIVER_NIVEAUX_DE_GRIS) {
@@ -97,13 +96,13 @@ public class Main {
             System.out.println("Préparation des données RGB brutes (" + nbImagesTotales + " images)...");
         }
 
-        int idx = 0; // Compteur dynamique pour remplir les tableaux sans sauts d'index
+        // Constitution du dataset final avec application des filtres
+        int idx = 0;
         for (int i = 0; i < nbImagesOriginales; i++) {
             Image img = imagesTrain.get(i);
             int label = img.label();
 
             if (ACTIVER_NIVEAUX_DE_GRIS) {
-                // --- MODE 1 : NUANCES DE GRIS ---
                 resultatsTrain[idx] = label;
                 int[] pixelsContours = ACTIVER_CONTOURS ?
                         TraitementSignal.appliquerFiltreContours(img.donnees(), largeurInitiale, hauteurInitiale) : img.donnees();
@@ -114,7 +113,7 @@ public class Main {
                 }
                 idx++;
 
-                // Ajout de l'image miroir uniquement si l'interrupteur est actif
+                // Ajout de la version miroir si activée
                 if (ACTIVER_MIROIR) {
                     resultatsTrain[idx] = label;
                     int[] pixelsMiroir = TraitementSignal.appliquerMiroir(img.donnees(), largeurInitiale, hauteurInitiale);
@@ -128,7 +127,6 @@ public class Main {
                     idx++;
                 }
             } else {
-                // --- MODE 2 : RGB BRUT ---
                 resultatsTrain[idx] = label;
                 for (int j = 0; j < tailleEntree; j++) {
                     entreesTrain[idx][j] = img.donnees()[j] / diviseur;
@@ -138,13 +136,14 @@ public class Main {
                 if (ACTIVER_MIROIR) {
                     resultatsTrain[idx] = label;
                     for (int j = 0; j < tailleEntree; j++) {
-                        entreesTrain[idx][j] = img.donnees()[j] / diviseur; // Copie identique pour le mode RGB brut
+                        entreesTrain[idx][j] = img.donnees()[j] / diviseur;
                     }
                     idx++;
                 }
             }
         }
 
+        // Phase d'apprentissage
         System.out.println("Début de l'apprentissage...");
         Neurone neurone = new NeuroneSigmoide(tailleEntree);
         neurone.apprentissage(entreesTrain, resultatsTrain, MSE_LIMITE);
@@ -162,6 +161,7 @@ public class Main {
             return;
         }
 
+        // Chargement du dataset de test
         List<String> testChats = Image.listeFichiers("dataset_animaux/test/cat/");
         List<String> testChiens = Image.listeFichiers("dataset_animaux/test/dog/");
 
@@ -188,17 +188,17 @@ public class Main {
 
         int bonnesReponses = 0;
         int totalTest = imagesTest.size();
-
-        // Détermination du diviseur pour le test (doit être identique à l'entraînement)
         float diviseur = ACTIVER_NORMALISATION ? ValeurNormalisation : 1.0f;
 
         System.out.println("Évaluation détaillée sur " + totalTest + " images...");
+
+        // Évaluation de chaque image
         for (int i = 0; i < totalTest; i++) {
             Image img = imagesTest.get(i);
             int labelReel = img.label();
-
             float[] entreeTest = new float[tailleEntree];
 
+            // Application du même prétraitement que pour l'entraînement
             if (ACTIVER_NIVEAUX_DE_GRIS) {
                 int[] pixelsContours = ACTIVER_CONTOURS ?
                         TraitementSignal.appliquerFiltreContours(img.donnees(), largeurInitiale, hauteurInitiale) : img.donnees();
@@ -213,6 +213,7 @@ public class Main {
                 }
             }
 
+            // Prédiction du réseau
             neurone.metAJour(entreeTest);
             float sortieBrute = neurone.sortie();
             int labelTrouve = (sortieBrute >= 0.5f) ? 1 : 0;
@@ -228,6 +229,7 @@ public class Main {
             }
         }
 
+        // Calcul et affichage du score de précision
         float pourcentage = ((float) bonnesReponses / totalTest) * 100;
         System.out.println("\n=========================================");
         System.out.println("Résultats sur " + totalTest + " images de test :");
