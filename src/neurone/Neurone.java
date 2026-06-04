@@ -91,7 +91,7 @@ public abstract class Neurone implements iNeurone
 			System.out.printf("Itération %d, mse:  %.6f\n", iter, mse);
 			iter += 1;
 		}
-        while (mse > MSElimite && iter < 1000);
+        while (mse > MSElimite && iter < 2000);
 	}
 
 	public void sauvegarde(String chemin) // optionel
